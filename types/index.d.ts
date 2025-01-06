@@ -2,40 +2,42 @@ type IntersectionFromUnion<U extends object> = (U extends any ? (k?: U) => void 
 type KeysOfReturnTypes<T> = T extends ((external?: {
     [K: string]: any;
 }) => {
-    [K in infer Z]?: Checker<any>;
+    [K in infer Z]?: Checker;
 })[] ? Z : never;
 type ReturnOfFunction<T> = T extends (...rest: any) => infer E ? E : never;
 type Index = string | number | symbol;
-export type RawCheck<G extends (NoBindChecker<any> | undefined)[]> = (strict: boolean, value: any, generic?: G, { name, }?: {
+export type RawCheck<G extends (NoBindChecker | undefined)[] = NoBindChecker[]> = (strict: boolean, value: any, generic?: G, { name, }?: {
     name?: string;
 }) => string | undefined;
-export interface NoBindChecker<T = any, G extends (NoBindChecker<any> | undefined)[] = []> {
+export interface NoBindChecker<G extends (NoBindChecker | undefined)[] = any[]> {
     _rawCheck: RawCheck<G>;
-    check: (value: any, generic?: G) => T;
-    strictCheck: (value: any, generic?: G) => T;
+    check: (value: any, generic?: G) => void;
+    strictCheck: (value: any, generic?: G) => void;
 }
-export interface Checker<T, G extends (NoBindChecker<any> | undefined)[] = NoBindChecker<any>[]> extends NoBindChecker<T, G> {
-    bind: (generic: G) => NoBindChecker<T, []>;
+export interface Checker<G extends (NoBindChecker | undefined)[] = NoBindChecker[]> extends NoBindChecker<G> {
+    bind: (generic: G) => NoBindChecker<[]>;
 }
-export declare function buildCheckerFromRaw<T, G extends (NoBindChecker<any> | undefined)[]>(rawCheck: RawCheck<G>): Checker<T, G>;
-export type CheckersOfBuilders<T extends ((external?: any) => {
-    [K: string]: Checker<any>;
+export declare function buildCheckerFromRaw<G extends (NoBindChecker | undefined)[]>(rawCheck: RawCheck<G>): Checker<G>;
+type CheckersOfBuilders<T extends ((external?: any) => {
+    [K: string]: Checker;
 })[]> = IntersectionFromUnion<{
     [K in number]: ReturnOfFunction<T[K]>;
 }[number]>;
 export declare function buildCheckers<T extends ((external?: {
-    [K in Z]: Checker<any>;
+    [K in Z]: Checker;
 }) => {
-    [K: string]: Checker<any>;
-})[], Z extends Index = KeysOfReturnTypes<T>>(...fns: T): { [K in Z]: Checker<any, NoBindChecker<any, []>[]>; };
+    [K: string]: Checker;
+})[], Z extends Index = KeysOfReturnTypes<T>, N = CheckersOfBuilders<T>>(...fns: T): N;
 export declare const PrimitiveCheckers: {
-    string: Checker<unknown, []>;
-    number: Checker<unknown, []>;
-    boolean: Checker<unknown, []>;
-    symbol: Checker<unknown, []>;
-    bigint: Checker<unknown, []>;
-    object: Checker<unknown, []>;
-    Array: Checker<unknown, [T?: NoBindChecker<any, []> | undefined]>;
-    undefined: Checker<unknown, []>;
+    string: Checker<[]>;
+    number: Checker<[]>;
+    boolean: Checker<[]>;
+    symbol: Checker<[]>;
+    bigint: Checker<[]>;
+    object: Checker<[]>;
+    Array: Checker<[T?: NoBindChecker<any[]> | undefined]>;
+    undefined: Checker<[]>;
+    Union: Checker<NoBindChecker<any[]>[]>;
+    Intersection: Checker<NoBindChecker<any[]>[]>;
 };
 export {};

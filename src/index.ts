@@ -5,7 +5,7 @@ type IntersectionFromUnion<U extends object> = (
    : never;
 
 type KeysOfReturnTypes<T> = T extends ((external?: { [K: string]: any }) => {
-   [K in infer Z]?: Checker<any>;
+   [K in infer Z]?: Checker;
 })[]
    ? Z
    : never;
@@ -14,7 +14,7 @@ type ReturnOfFunction<T> = T extends (...rest: any) => infer E ? E : never;
 
 type Index = string | number | symbol;
 
-export type RawCheck<G extends (NoBindChecker<any> | undefined)[]> = (
+export type RawCheck<G extends (NoBindChecker | undefined)[] = NoBindChecker[]> = (
    strict: boolean,
    value: any,
    generic?: G,
@@ -28,60 +28,53 @@ export type RawCheck<G extends (NoBindChecker<any> | undefined)[]> = (
 ) => string | undefined;
 
 export interface NoBindChecker<
-   T = any,
-   G extends (NoBindChecker<any> | undefined)[] = []
+   G extends (NoBindChecker | undefined)[] = any[]
 > {
    _rawCheck: RawCheck<G>;
-   check: (value: any, generic?: G) => T;
-   strictCheck: (value: any, generic?: G) => T;
+   check: (value: any, generic?: G) => void;
+   strictCheck: (value: any, generic?: G) => void;
 }
 
 export interface Checker<
-   T,
-   G extends (NoBindChecker<any> | undefined)[] = NoBindChecker<any>[]
-> extends NoBindChecker<T, G> {
-   bind: (generic: G) => NoBindChecker<T, []>;
+   G extends (NoBindChecker | undefined)[] = NoBindChecker[]
+> extends NoBindChecker<G> {
+   bind: (generic: G) => NoBindChecker<[]>;
 }
 
-export function buildCheckerFromRaw<
-   T,
-   G extends (NoBindChecker<any> | undefined)[]
->(rawCheck: RawCheck<G>): Checker<T, G> {
+export function buildCheckerFromRaw<G extends (NoBindChecker | undefined)[]>(
+   rawCheck: RawCheck<G>
+): Checker<G> {
    let checker = {
       _rawCheck: rawCheck,
-      check: (value: any, generic?: G) => {
+      check: (value: any, generic: G = [] as any) => {
          let error = rawCheck(false, value, generic);
          if (error) throw new Error(error);
-         else return value as T;
       },
-      strictCheck: (value: any, generic?: G) => {
+      strictCheck: (value: any, generic: G = [] as any) => {
          let error = rawCheck(true, value, generic);
          if (error) throw new Error(error);
-         else return value as T;
       },
-      bind: (generic: G): NoBindChecker<T> => {
+      bind: (generic: G): NoBindChecker => {
          return {
             _rawCheck: (strict, value, _, options) =>
                rawCheck(strict, value, generic, options),
             check: (value: any) => {
                let error = rawCheck(false, value, generic);
                if (error) throw new Error(error);
-               else return value as T;
             },
-            strictCheck: (value: any) => {
+            strictCheck: (value: any) => (value: any) => {
                let error = rawCheck(true, value, generic);
                if (error) throw new Error(error);
-               else return value as T;
             },
          };
       },
-   } as Checker<T, G>;
+   } as Checker<G>;
    return checker;
 }
 
-export type CheckersOfBuilders<
+type CheckersOfBuilders<
    T extends ((external?: any) => {
-      [K: string]: Checker<any>;
+      [K: string]: Checker;
    })[]
 > = IntersectionFromUnion<
    {
@@ -90,16 +83,17 @@ export type CheckersOfBuilders<
 >;
 
 export function buildCheckers<
-   T extends ((external?: { [K in Z]: Checker<any> }) => {
-      [K: string]: Checker<any>;
+   T extends ((external?: { [K in Z]: Checker }) => {
+      [K: string]: Checker;
    })[],
-   Z extends Index = KeysOfReturnTypes<T>
+   Z extends Index = KeysOfReturnTypes<T>,
+   N = CheckersOfBuilders<T>
 >(...fns: T) {
-   let checkers: { [K in Z]: Checker<any> } = {} as any;
+   let checkers = {} as any;
    fns.forEach((createChecker) => {
       Object.assign(checkers, createChecker(checkers));
    });
-   return checkers;
+   return checkers as N;
 }
 
 export const PrimitiveCheckers = {
@@ -180,7 +174,7 @@ export const PrimitiveCheckers = {
       (
          strict: boolean,
          value: any,
-         generic: [T?: NoBindChecker<any>] = [],
+         generic: [T?: NoBindChecker] = [],
          { name = "value" }: { name?: string } = {}
       ): string | undefined => {
          if (!Array.isArray(value)) {
@@ -207,6 +201,36 @@ export const PrimitiveCheckers = {
       ): string | undefined => {
          if (value !== undefined) {
             return `${name} must be undefined`;
+         }
+      }
+   ),
+   Union: buildCheckerFromRaw(
+      (
+         strict: boolean,
+         value: any,
+         generic: NoBindChecker[] = [],
+         { name = "value" }: { name?: string } = {}
+      ): string | undefined => {
+         let errors = generic.map((checker) =>
+            checker._rawCheck(strict, value, [], { name })
+         );
+         if (errors.every((error) => error)) {
+            return errors.join(" or ");
+         }
+      }
+   ),
+   Intersection: buildCheckerFromRaw(
+      (
+         strict: boolean,
+         value: any,
+         generic: NoBindChecker[] = [],
+         { name = "value" }: { name?: string } = {}
+      ): string | undefined => {
+         for (let checker of generic) {
+            let error = checker._rawCheck(strict, value, [], { name });
+            if (error) {
+               return error;
+            }
          }
       }
    ),

@@ -6,19 +6,15 @@ exports.buildCheckers = buildCheckers;
 function buildCheckerFromRaw(rawCheck) {
     let checker = {
         _rawCheck: rawCheck,
-        check: (value, generic) => {
+        check: (value, generic = []) => {
             let error = rawCheck(false, value, generic);
             if (error)
                 throw new Error(error);
-            else
-                return value;
         },
-        strictCheck: (value, generic) => {
+        strictCheck: (value, generic = []) => {
             let error = rawCheck(true, value, generic);
             if (error)
                 throw new Error(error);
-            else
-                return value;
         },
         bind: (generic) => {
             return {
@@ -27,15 +23,11 @@ function buildCheckerFromRaw(rawCheck) {
                     let error = rawCheck(false, value, generic);
                     if (error)
                         throw new Error(error);
-                    else
-                        return value;
                 },
-                strictCheck: (value) => {
+                strictCheck: (value) => (value) => {
                     let error = rawCheck(true, value, generic);
                     if (error)
                         throw new Error(error);
-                    else
-                        return value;
                 },
             };
         },
@@ -99,6 +91,20 @@ exports.PrimitiveCheckers = {
     undefined: buildCheckerFromRaw((strict, value, generic = [], { name = "value" } = {}) => {
         if (value !== undefined) {
             return `${name} must be undefined`;
+        }
+    }),
+    Union: buildCheckerFromRaw((strict, value, generic = [], { name = "value" } = {}) => {
+        let errors = generic.map((checker) => checker._rawCheck(strict, value, [], { name }));
+        if (errors.every((error) => error)) {
+            return errors.join(" or ");
+        }
+    }),
+    Intersection: buildCheckerFromRaw((strict, value, generic = [], { name = "value" } = {}) => {
+        for (let checker of generic) {
+            let error = checker._rawCheck(strict, value, [], { name });
+            if (error) {
+                return error;
+            }
         }
     }),
     // Map: buildCheckerFromRaw<[T: NoBindChecker]>(
